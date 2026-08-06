@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  -webkit-text-size-adjust: 100%;
+  /* respect notches on phones */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Large, thumb-friendly form controls. */
+@layer components {
+  .field-label {
+    @apply block text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1;
+  }
+  .field-input {
+    @apply w-full rounded-lg border border-rig-line bg-rig-panel px-3 py-3 text-base
+      text-slate-100 placeholder-slate-500 outline-none
+      focus:border-rig-accent focus:ring-1 focus:ring-rig-accent;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3
+      text-base font-semibold transition-colors disabled:opacity-50;
+  }
+  .btn-accent {
+    @apply btn bg-rig-accent text-slate-900 hover:bg-amber-400;
+  }
+  .btn-ghost {
+    @apply btn border border-rig-line bg-rig-panel text-slate-200 hover:bg-slate-700;
+  }
+  .card {
+    @apply rounded-xl border border-rig-line bg-rig-panel;
+  }
+}
