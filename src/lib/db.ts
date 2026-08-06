@@ -1,5 +1,5 @@
-import { isCloud, supabase, PHOTO_BUCKET } from './supabase'
-import { nowIso, uuid } from './id'
+import localforage from 'localforage'
+import { nowIso } from './id'
 import {
   PHOTO_TABLE,
   SWAB_RUN_TABLE,
@@ -7,17 +7,85 @@ import {
   WORK_ORDER_TABLE,
   type Photo,
   type SwabRun,
+  type SyncFields,
+  type TableName,
   type TankLevel,
   type WorkOrder,
 } from './types'
 
 /**
- * The data layer. Both backends implement the same `Store` interface so page
- * code never has to know whether it is talking to Supabase or localStorage.
- *
- *  - `cloudStore`  -> Supabase Postgres + Realtime + Storage (live multi-device sync)
- *  - `localStore`  -> browser localStorage + BroadcastChannel (single device, cross-tab)
+ * Offline-first local store. Every read and write goes to the on-device
+ * database (IndexedDB via localforage), so the app is fully usable with no
+ * network. Writes stamp `updated_at` and mark the row `_dirty`; deletes are
+ * soft (they set `deleted_at`) so they can be synced. The cloud is handled
+ * separately by src/lib/sync.ts, which pushes dirty rows up, pulls remote
+ * changes down, and calls back here to merge them in.
  */
+
+const lf = localforage.createInstance({
+  name: 'swablink',
+  storeName: 'work_orders_db',
+})
+
+type AnyRow = SyncFields & { id: string; work_order_id?: string }
+
+// Serialize all read-modify-write cycles so concurrent saves can't lose data.
+let writeChain: Promise<unknown> = Promise.resolve()
+function serialize<T>(fn: () => Promise<T>): Promise<T> {
+  const next = writeChain.then(fn, fn)
+  writeChain = next.catch(() => {})
+  return next
+}
+
+async function readTable<T>(table: TableName): Promise<T[]> {
+  return ((await lf.getItem<T[]>(table)) ?? []) as T[]
+}
+function writeTable<T>(table: TableName, rows: T[]): Promise<T[]> {
+  return lf.setItem(table, rows)
+}
+
+/** Live = not soft-deleted. */
+function live<T extends SyncFields>(rows: T[]): T[] {
+  return rows.filter((r) => !r.deleted_at)
+}
+
+// ---------------------------------------------------------------------------
+// Change notification (in-tab listeners + other tabs via BroadcastChannel).
+// sync.ts also listens so it can push shortly after a local edit.
+// ---------------------------------------------------------------------------
+
+const channel: BroadcastChannel | null =
+  typeof BroadcastChannel !== 'undefined'
+    ? new BroadcastChannel('swab-link')
+    : null
+
+type Listener = (workOrderId: string | null) => void
+const listeners = new Set<Listener>()
+
+export function notifyChange(workOrderId: string | null, broadcast = true) {
+  listeners.forEach((l) => l(workOrderId))
+  if (broadcast) channel?.postMessage({ workOrderId })
+}
+
+channel?.addEventListener('message', (e) => {
+  const wid = (e.data && e.data.workOrderId) ?? null
+  listeners.forEach((l) => l(wid))
+})
+
+function subscribe(match: (wid: string | null) => boolean, cb: () => void) {
+  const listener: Listener = (wid) => {
+    if (match(wid)) cb()
+  }
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public store used by the UI
+// ---------------------------------------------------------------------------
+
 export interface Store {
   listWorkOrders(): Promise<WorkOrder[]>
   getWorkOrder(id: string): Promise<WorkOrder | null>
@@ -41,167 +109,109 @@ export interface Store {
   /** Store an image (data URL) and return a URL usable in an <img src>. */
   uploadImage(workOrderId: string, dataUrl: string): Promise<string>
 
-  /** Fire `cb` whenever the work-order list may have changed. Returns unsubscribe. */
   subscribeList(cb: () => void): () => void
-  /** Fire `cb` whenever anything about this work order may have changed. */
   subscribeWorkOrder(workOrderId: string, cb: () => void): () => void
 }
 
-// ---------------------------------------------------------------------------
-// localStorage backend
-// ---------------------------------------------------------------------------
-
-const LS_KEYS = {
-  workOrders: 'swablink:work_orders',
-  swabRuns: 'swablink:swab_runs',
-  tankLevels: 'swablink:tank_levels',
-  photos: 'swablink:photos',
-} as const
-
-function lsRead<T>(key: string): T[] {
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as T[]) : []
-  } catch {
-    return []
-  }
+async function upsertRow<T extends AnyRow>(
+  table: TableName,
+  row: T,
+  workOrderId: string | null,
+) {
+  await serialize(async () => {
+    const rows = await readTable<T>(table)
+    const stamped = { ...row, updated_at: nowIso(), _dirty: true }
+    const i = rows.findIndex((r) => r.id === row.id)
+    if (i >= 0) rows[i] = stamped
+    else rows.push(stamped)
+    await writeTable(table, rows)
+  })
+  notifyChange(workOrderId)
 }
 
-function lsWrite<T>(key: string, rows: T[]): void {
-  localStorage.setItem(key, JSON.stringify(rows))
+async function patchRow<T extends AnyRow>(
+  table: TableName,
+  id: string,
+  patch: Partial<T>,
+): Promise<string | null> {
+  let workOrderId: string | null = null
+  await serialize(async () => {
+    const rows = await readTable<T>(table)
+    const i = rows.findIndex((r) => r.id === id)
+    if (i < 0) return
+    rows[i] = { ...rows[i], ...patch, updated_at: nowIso(), _dirty: true }
+    workOrderId = rows[i].work_order_id ?? rows[i].id
+    await writeTable(table, rows)
+  })
+  return workOrderId
 }
 
-// Cross-tab change notification (best-effort). Same-tab callers are notified
-// directly; other tabs receive the BroadcastChannel message.
-const channel: BroadcastChannel | null =
-  typeof BroadcastChannel !== 'undefined'
-    ? new BroadcastChannel('swab-link')
-    : null
-
-type Listener = (workOrderId: string | null) => void
-const listeners = new Set<Listener>()
-
-function notify(workOrderId: string | null) {
-  listeners.forEach((l) => l(workOrderId))
-  channel?.postMessage({ workOrderId })
+async function softDelete<T extends AnyRow>(
+  table: TableName,
+  id: string,
+): Promise<string | null> {
+  return patchRow<T>(table, id, { deleted_at: nowIso() } as Partial<T>)
 }
 
-channel?.addEventListener('message', (e) => {
-  const wid = (e.data && e.data.workOrderId) ?? null
-  listeners.forEach((l) => l(wid))
-})
-
-function subscribe(match: (wid: string | null) => boolean, cb: () => void) {
-  const listener: Listener = (wid) => {
-    if (match(wid)) cb()
-  }
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-const localStore: Store = {
+export const store: Store = {
   async listWorkOrders() {
-    return lsRead<WorkOrder>(LS_KEYS.workOrders).sort((a, b) =>
-      b.updated_at.localeCompare(a.updated_at),
-    )
+    const rows = live(await readTable<WorkOrder>(WORK_ORDER_TABLE))
+    return rows.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
   },
   async getWorkOrder(id) {
-    return lsRead<WorkOrder>(LS_KEYS.workOrders).find((w) => w.id === id) ?? null
+    const rows = await readTable<WorkOrder>(WORK_ORDER_TABLE)
+    const found = rows.find((w) => w.id === id)
+    return found && !found.deleted_at ? found : null
   },
   async upsertWorkOrder(wo) {
-    const rows = lsRead<WorkOrder>(LS_KEYS.workOrders)
-    const i = rows.findIndex((w) => w.id === wo.id)
-    const next = { ...wo, updated_at: nowIso() }
-    if (i >= 0) rows[i] = next
-    else rows.push(next)
-    lsWrite(LS_KEYS.workOrders, rows)
-    notify(wo.id)
+    await upsertRow(WORK_ORDER_TABLE, wo, wo.id)
   },
 
   async listSwabRuns(workOrderId) {
-    return lsRead<SwabRun>(LS_KEYS.swabRuns)
+    return live(await readTable<SwabRun>(SWAB_RUN_TABLE))
       .filter((r) => r.work_order_id === workOrderId)
       .sort((a, b) => b.run_time.localeCompare(a.run_time))
   },
   async listTankLevels(workOrderId) {
-    return lsRead<TankLevel>(LS_KEYS.tankLevels)
+    return live(await readTable<TankLevel>(TANK_LEVEL_TABLE))
       .filter((r) => r.work_order_id === workOrderId)
       .sort((a, b) => b.reading_time.localeCompare(a.reading_time))
   },
   async listPhotos(workOrderId) {
-    return lsRead<Photo>(LS_KEYS.photos)
+    return live(await readTable<Photo>(PHOTO_TABLE))
       .filter((r) => r.work_order_id === workOrderId)
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
   },
 
   async insertSwabRun(row) {
-    const rows = lsRead<SwabRun>(LS_KEYS.swabRuns)
-    rows.push(row)
-    lsWrite(LS_KEYS.swabRuns, rows)
-    notify(row.work_order_id)
+    await upsertRow(SWAB_RUN_TABLE, row, row.work_order_id)
   },
   async updateSwabRun(id, patch) {
-    const rows = lsRead<SwabRun>(LS_KEYS.swabRuns)
-    const i = rows.findIndex((r) => r.id === id)
-    if (i >= 0) {
-      rows[i] = { ...rows[i], ...patch }
-      lsWrite(LS_KEYS.swabRuns, rows)
-      notify(rows[i].work_order_id)
-    }
+    notifyChange(await patchRow<SwabRun>(SWAB_RUN_TABLE, id, patch))
   },
   async deleteSwabRun(id) {
-    const rows = lsRead<SwabRun>(LS_KEYS.swabRuns)
-    const row = rows.find((r) => r.id === id)
-    lsWrite(
-      LS_KEYS.swabRuns,
-      rows.filter((r) => r.id !== id),
-    )
-    notify(row?.work_order_id ?? null)
+    notifyChange(await softDelete<SwabRun>(SWAB_RUN_TABLE, id))
   },
 
   async insertTankLevel(row) {
-    const rows = lsRead<TankLevel>(LS_KEYS.tankLevels)
-    rows.push(row)
-    lsWrite(LS_KEYS.tankLevels, rows)
-    notify(row.work_order_id)
+    await upsertRow(TANK_LEVEL_TABLE, row, row.work_order_id)
   },
   async updateTankLevel(id, patch) {
-    const rows = lsRead<TankLevel>(LS_KEYS.tankLevels)
-    const i = rows.findIndex((r) => r.id === id)
-    if (i >= 0) {
-      rows[i] = { ...rows[i], ...patch }
-      lsWrite(LS_KEYS.tankLevels, rows)
-      notify(rows[i].work_order_id)
-    }
+    notifyChange(await patchRow<TankLevel>(TANK_LEVEL_TABLE, id, patch))
   },
   async deleteTankLevel(id) {
-    const rows = lsRead<TankLevel>(LS_KEYS.tankLevels)
-    const row = rows.find((r) => r.id === id)
-    lsWrite(
-      LS_KEYS.tankLevels,
-      rows.filter((r) => r.id !== id),
-    )
-    notify(row?.work_order_id ?? null)
+    notifyChange(await softDelete<TankLevel>(TANK_LEVEL_TABLE, id))
   },
 
   async insertPhoto(row) {
-    const rows = lsRead<Photo>(LS_KEYS.photos)
-    rows.push(row)
-    lsWrite(LS_KEYS.photos, rows)
-    notify(row.work_order_id)
+    await upsertRow(PHOTO_TABLE, row, row.work_order_id)
   },
   async deletePhoto(id) {
-    const rows = lsRead<Photo>(LS_KEYS.photos)
-    const row = rows.find((r) => r.id === id)
-    lsWrite(
-      LS_KEYS.photos,
-      rows.filter((r) => r.id !== id),
-    )
-    notify(row?.work_order_id ?? null)
+    notifyChange(await softDelete<Photo>(PHOTO_TABLE, id))
   },
 
   async uploadImage(_workOrderId, dataUrl) {
-    // In local mode we simply keep the data URL.
+    // Photos/signatures are kept as data URLs and synced as text with the row.
     return dataUrl
   },
 
@@ -214,157 +224,71 @@ const localStore: Store = {
 }
 
 // ---------------------------------------------------------------------------
-// Supabase backend
+// Raw access for the sync engine (src/lib/sync.ts)
 // ---------------------------------------------------------------------------
 
-function sb() {
-  if (!supabase) throw new Error('Supabase client not configured')
-  return supabase
+export const ALL_TABLES: TableName[] = [
+  WORK_ORDER_TABLE,
+  SWAB_RUN_TABLE,
+  TANK_LEVEL_TABLE,
+  PHOTO_TABLE,
+]
+
+/** All rows incl. soft-deleted (for pushing). */
+export function rawAll<T>(table: TableName): Promise<T[]> {
+  return readTable<T>(table)
 }
 
-const cloudStore: Store = {
-  async listWorkOrders() {
-    const { data, error } = await sb()
-      .from(WORK_ORDER_TABLE)
-      .select('*')
-      .order('updated_at', { ascending: false })
-    if (error) throw error
-    return (data ?? []) as WorkOrder[]
-  },
-  async getWorkOrder(id) {
-    const { data, error } = await sb()
-      .from(WORK_ORDER_TABLE)
-      .select('*')
-      .eq('id', id)
-      .maybeSingle()
-    if (error) throw error
-    return (data as WorkOrder) ?? null
-  },
-  async upsertWorkOrder(wo) {
-    const { error } = await sb()
-      .from(WORK_ORDER_TABLE)
-      .upsert({ ...wo, updated_at: nowIso() })
-    if (error) throw error
-  },
-
-  async listSwabRuns(workOrderId) {
-    const { data, error } = await sb()
-      .from(SWAB_RUN_TABLE)
-      .select('*')
-      .eq('work_order_id', workOrderId)
-      .order('run_time', { ascending: false })
-    if (error) throw error
-    return (data ?? []) as SwabRun[]
-  },
-  async listTankLevels(workOrderId) {
-    const { data, error } = await sb()
-      .from(TANK_LEVEL_TABLE)
-      .select('*')
-      .eq('work_order_id', workOrderId)
-      .order('reading_time', { ascending: false })
-    if (error) throw error
-    return (data ?? []) as TankLevel[]
-  },
-  async listPhotos(workOrderId) {
-    const { data, error } = await sb()
-      .from(PHOTO_TABLE)
-      .select('*')
-      .eq('work_order_id', workOrderId)
-      .order('created_at', { ascending: false })
-    if (error) throw error
-    return (data ?? []) as Photo[]
-  },
-
-  async insertSwabRun(row) {
-    const { error } = await sb().from(SWAB_RUN_TABLE).insert(row)
-    if (error) throw error
-  },
-  async updateSwabRun(id, patch) {
-    const { error } = await sb().from(SWAB_RUN_TABLE).update(patch).eq('id', id)
-    if (error) throw error
-  },
-  async deleteSwabRun(id) {
-    const { error } = await sb().from(SWAB_RUN_TABLE).delete().eq('id', id)
-    if (error) throw error
-  },
-
-  async insertTankLevel(row) {
-    const { error } = await sb().from(TANK_LEVEL_TABLE).insert(row)
-    if (error) throw error
-  },
-  async updateTankLevel(id, patch) {
-    const { error } = await sb().from(TANK_LEVEL_TABLE).update(patch).eq('id', id)
-    if (error) throw error
-  },
-  async deleteTankLevel(id) {
-    const { error } = await sb().from(TANK_LEVEL_TABLE).delete().eq('id', id)
-    if (error) throw error
-  },
-
-  async insertPhoto(row) {
-    const { error } = await sb().from(PHOTO_TABLE).insert(row)
-    if (error) throw error
-  },
-  async deletePhoto(id) {
-    const { error } = await sb().from(PHOTO_TABLE).delete().eq('id', id)
-    if (error) throw error
-  },
-
-  async uploadImage(workOrderId, dataUrl) {
-    const blob = await (await fetch(dataUrl)).blob()
-    const ext = blob.type.split('/')[1] || 'png'
-    const path = `${workOrderId}/${uuid()}.${ext}`
-    const { error } = await sb()
-      .storage.from(PHOTO_BUCKET)
-      .upload(path, blob, { contentType: blob.type, upsert: true })
-    if (error) throw error
-    const { data } = sb().storage.from(PHOTO_BUCKET).getPublicUrl(path)
-    return data.publicUrl
-  },
-
-  subscribeList(cb) {
-    const ch = sb()
-      .channel('work_orders_list')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: WORK_ORDER_TABLE },
-        cb,
-      )
-      .subscribe()
-    return () => {
-      sb().removeChannel(ch)
-    }
-  },
-  subscribeWorkOrder(workOrderId, cb) {
-    const filter = `work_order_id=eq.${workOrderId}`
-    const ch = sb()
-      .channel(`work_order_${workOrderId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: WORK_ORDER_TABLE, filter: `id=eq.${workOrderId}` },
-        cb,
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: SWAB_RUN_TABLE, filter },
-        cb,
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: TANK_LEVEL_TABLE, filter },
-        cb,
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: PHOTO_TABLE, filter },
-        cb,
-      )
-      .subscribe()
-    return () => {
-      sb().removeChannel(ch)
-    }
-  },
+/** Rows with unsynced local changes. */
+export async function dirtyRows<T extends SyncFields>(
+  table: TableName,
+): Promise<T[]> {
+  return (await readTable<T>(table)).filter((r) => r._dirty)
 }
 
-/** The active store for this session, chosen by whether Supabase is configured. */
-export const store: Store = isCloud ? cloudStore : localStore
+/** Clear the dirty flag on rows whose local `updated_at` still matches (i.e.
+ *  they were not edited again while the push was in flight). */
+export function clearDirty(
+  table: TableName,
+  synced: { id: string; updated_at: string }[],
+): Promise<void> {
+  const byId = new Map(synced.map((s) => [s.id, s.updated_at]))
+  return serialize(async () => {
+    const rows = await readTable<AnyRow>(table)
+    let changed = false
+    for (const r of rows) {
+      if (r._dirty && byId.get(r.id) === r.updated_at) {
+        delete r._dirty
+        changed = true
+      }
+    }
+    if (changed) await writeTable(table, rows)
+  }).then(() => undefined)
+}
+
+/** Merge server rows into local, last-write-wins, without clobbering newer
+ *  local edits. Returns the set of affected work-order ids for notification. */
+export function mergeRemote<T extends AnyRow>(
+  table: TableName,
+  remote: T[],
+): Promise<Set<string>> {
+  const affected = new Set<string>()
+  return serialize(async () => {
+    const rows = await readTable<T>(table)
+    const byId = new Map(rows.map((r) => [r.id, r]))
+    let changed = false
+    for (const rem of remote) {
+      const loc = byId.get(rem.id)
+      // Keep local if it has unsynced edits that are newer than the server's.
+      if (loc?._dirty && loc.updated_at > rem.updated_at) continue
+      const isNewer = !loc || rem.updated_at > loc.updated_at
+      const confirmsOurPush = loc?._dirty && rem.updated_at === loc.updated_at
+      if (isNewer || confirmsOurPush) {
+        byId.set(rem.id, { ...rem, _dirty: false } as T)
+        if (isNewer) affected.add(rem.work_order_id ?? rem.id)
+        changed = true
+      }
+    }
+    if (changed) await writeTable(table, Array.from(byId.values()))
+  }).then(() => affected)
+}

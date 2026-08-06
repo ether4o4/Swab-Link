@@ -44,7 +44,8 @@ create table if not exists public.work_orders (
 
   notes text not null default '',
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
 create table if not exists public.swab_runs (
@@ -56,7 +57,9 @@ create table if not exists public.swab_runs (
   depth_to_fluid text not null default '',
   fluid_recovered_bbls text not null default '',
   note text not null default '',
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
 create table if not exists public.tank_levels (
@@ -67,7 +70,9 @@ create table if not exists public.tank_levels (
   level_value text not null default '',
   level_unit text not null default 'ft-in' check (level_unit in ('ft-in', 'bbls')),
   note text not null default '',
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
 create table if not exists public.photos (
@@ -75,12 +80,27 @@ create table if not exists public.photos (
   work_order_id uuid not null references public.work_orders (id) on delete cascade,
   storage_path text not null default '',
   caption text not null default '',
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
+
+-- Idempotent upgrade for databases created before the sync columns existed.
+alter table public.work_orders add column if not exists deleted_at timestamptz;
+alter table public.swab_runs  add column if not exists updated_at timestamptz not null default now();
+alter table public.swab_runs  add column if not exists deleted_at timestamptz;
+alter table public.tank_levels add column if not exists updated_at timestamptz not null default now();
+alter table public.tank_levels add column if not exists deleted_at timestamptz;
+alter table public.photos     add column if not exists updated_at timestamptz not null default now();
+alter table public.photos     add column if not exists deleted_at timestamptz;
 
 create index if not exists swab_runs_wo_idx on public.swab_runs (work_order_id);
 create index if not exists tank_levels_wo_idx on public.tank_levels (work_order_id);
 create index if not exists photos_wo_idx on public.photos (work_order_id);
+create index if not exists work_orders_updated_idx on public.work_orders (updated_at);
+create index if not exists swab_runs_updated_idx on public.swab_runs (updated_at);
+create index if not exists tank_levels_updated_idx on public.tank_levels (updated_at);
+create index if not exists photos_updated_idx on public.photos (updated_at);
 
 -- ---------------------------------------------------------------------------
 -- Realtime: broadcast row changes to subscribed clients

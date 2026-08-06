@@ -2,11 +2,24 @@
 // supabase/schema.sql exactly. Numeric measurement fields are kept as strings
 // on the client so partially-typed values ("12.", "") round-trip cleanly through
 // the inputs; they are stored as numeric/text in Postgres.
+//
+// Every row carries `updated_at` and `deleted_at` so the offline-first sync
+// engine (src/lib/sync.ts) can reconcile local and cloud copies by last-write-
+// wins and propagate deletes as soft-deletes. `_dirty` is a local-only flag
+// (never sent to the server) marking rows that still need to be uploaded.
 
 export type WorkOrderStatus = 'open' | 'closed'
 
+/** Fields shared by every syncable row. */
+export interface SyncFields {
+  updated_at: string
+  deleted_at: string | null
+  /** Local-only: set when the row has unsynced local changes. Stripped on push. */
+  _dirty?: boolean
+}
+
 /** One row per job/day. */
-export interface WorkOrder {
+export interface WorkOrder extends SyncFields {
   id: string
   status: WorkOrderStatus
 
@@ -44,11 +57,10 @@ export interface WorkOrder {
 
   notes: string
   created_at: string
-  updated_at: string
 }
 
 /** Many per work order — the continuous swab log. */
-export interface SwabRun {
+export interface SwabRun extends SyncFields {
   id: string
   work_order_id: string
   run_number: string
@@ -63,7 +75,7 @@ export interface SwabRun {
 export type TankLevelUnit = 'ft-in' | 'bbls'
 
 /** Many per work order — "add a new level continuously through the day". */
-export interface TankLevel {
+export interface TankLevel extends SyncFields {
   id: string
   work_order_id: string
   reading_time: string // ISO timestamp
@@ -75,11 +87,11 @@ export interface TankLevel {
 }
 
 /** Many per work order. */
-export interface Photo {
+export interface Photo extends SyncFields {
   id: string
   work_order_id: string
-  // In cloud mode this is a Storage path resolved to a public URL; in fallback
-  // mode it is a data URL held in localStorage.
+  // Holds the photo as a data URL (base64). Stored and synced as plain text so
+  // photos travel with the row and need no separate binary upload.
   storage_path: string
   caption: string
   created_at: string

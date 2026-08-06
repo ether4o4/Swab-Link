@@ -41,6 +41,10 @@ jobs:
         run: npm run build
         env:
           CAPACITOR: 'true'
+          # Optional: set these two repository secrets to bake in cloud sync so
+          # the APK auto-uploads to the office PC. Empty = fully offline, no sync.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Sync web build into the Android project
         run: npx cap sync android
@@ -61,7 +65,6 @@ jobs:
           path: swab-link.apk
 
       - name: Publish to the "latest" Release
-        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest

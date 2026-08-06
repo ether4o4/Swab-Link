@@ -43,32 +43,42 @@ export function newWorkOrder(): WorkOrder {
     notes: '',
     created_at: ts,
     updated_at: ts,
+    deleted_at: null,
+    _dirty: true,
   }
 }
 
 export function newSwabRun(workOrderId: string, runNumber: number): SwabRun {
+  const ts = nowIso()
   return {
     id: uuid(),
     work_order_id: workOrderId,
     run_number: String(runNumber),
-    run_time: nowIso(),
+    run_time: ts,
     depth_run_to: '',
     depth_to_fluid: '',
     fluid_recovered_bbls: '',
     note: '',
-    created_at: nowIso(),
+    created_at: ts,
+    updated_at: ts,
+    deleted_at: null,
+    _dirty: true,
   }
 }
 
 export function newTankLevel(workOrderId: string): TankLevel {
+  const ts = nowIso()
   return {
     id: uuid(),
     work_order_id: workOrderId,
-    reading_time: nowIso(),
+    reading_time: ts,
     tank_label: '',
     level_value: '',
     level_unit: 'ft-in',
     note: '',
-    created_at: nowIso(),
+    created_at: ts,
+    updated_at: ts,
+    deleted_at: null,
+    _dirty: true,
   }
 }

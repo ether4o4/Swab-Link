@@ -127,12 +127,16 @@ export function WorkOrderForm() {
   async function addPhoto(dataUrl: string) {
     if (!id) return
     const url = await store.uploadImage(id, dataUrl)
+    const ts = nowIso()
     const photo: Photo = {
       id: uuid(),
       work_order_id: id,
       storage_path: url,
       caption: '',
-      created_at: nowIso(),
+      created_at: ts,
+      updated_at: ts,
+      deleted_at: null,
+      _dirty: true,
     }
     setPhotos((prev) => [photo, ...prev])
     await store.insertPhoto(photo)
