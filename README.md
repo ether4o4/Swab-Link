@@ -11,16 +11,23 @@ Runs in any browser on phone or PC, and installs to the home screen (PWA).
 
 **Live link:** https://ether4o4.github.io/Swab-Link/
 
-That's it — open it on your phone or your PC, same link. On a phone you can tap
-your browser's **Share → Add to Home Screen** and it behaves like a real app icon.
+Open it on your phone or your PC, same link. On a phone you can tap your browser's
+**Share → Add to Home Screen** and it behaves like a real app icon. (Data saves on
+each device by itself; to make phone and PC share the same jobs live, see *Live
+sync* below.)
 
-Nothing to install and nothing to type. (Data saves on each device by itself; to
-make phone and PC share the same jobs live, see *Live sync* below.)
+### Turn the link on once (≈1 minute, one time only)
 
-The link goes live automatically the first time the app is built — the deploy
-turns GitHub Pages on for you, so there's nothing to switch on by hand. If the
-page 404s right after the very first deploy, give it a minute; you can watch
-progress under the repo's **Actions** tab ("Deploy app to GitHub Pages").
+GitHub won't let the app switch this on by itself, so you flip it once:
+
+1. In your repo, click **Settings** (top bar) → **Pages** (left sidebar).
+2. Under **Build and deployment → Source**, choose **GitHub Actions**.
+3. That's it. Within a minute or two the link above goes live, and from then on it
+   updates itself automatically every time the app changes — you never touch this
+   again.
+
+You can watch it build under the repo's **Actions** tab ("Deploy app to GitHub
+Pages"); a green check means it's live.
 
 ## What a work order captures
 
