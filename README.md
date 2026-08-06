@@ -7,6 +7,29 @@ day.
 
 Runs in any browser on phone or PC, and installs to the home screen (PWA).
 
+## 👉 Just open the app (no coding)
+
+**Live link:** https://ether4o4.github.io/Swab-Link/
+
+That's it — open it on your phone or your PC, same link. On a phone you can tap
+your browser's **Share → Add to Home Screen** and it behaves like a real app icon.
+
+Nothing to install and nothing to type. (Data saves on each device by itself; to
+make phone and PC share the same jobs live, see *Live sync* below.)
+
+### One-time switch to make the link work (≈1 minute, do this once)
+
+The link goes live after you flip a single switch on GitHub — it can't turn
+itself on:
+
+1. Go to your repo → **Settings** → **Pages** (left sidebar).
+2. Under **Build and deployment → Source**, choose **GitHub Actions**.
+3. Done. Within a minute or two the app is live at the link above. It rebuilds
+   automatically every time the code changes — you never touch this again.
+
+If the page doesn't load yet, open the **Actions** tab and wait for the green
+check on the "Deploy app to GitHub Pages" run.
+
 ## What a work order captures
 
 - **Header** — well name/location, well depth, install date, last workover, tubing
@@ -19,7 +42,10 @@ Runs in any browser on phone or PC, and installs to the home screen (PWA).
 - **Photos** — snap from the phone camera.
 - **Sign-off** — name + on-screen signature.
 
-## Run it locally
+## Run it locally (only if you're a developer)
+
+You do **not** need this to use the app — use the live link above. This is just for
+editing the code:
 
 ```bash
 npm install
@@ -27,8 +53,7 @@ npm run dev
 ```
 
 Open the printed URL. With no cloud configured it runs in **local mode**: data is
-saved in that browser only, no sync between devices. That's enough to try the whole
-form.
+saved in that browser only, no sync between devices.
 
 ## Turn on live sync across devices (Supabase — free)
 

@@ -1,6 +1,23 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
+/** Inline logo (a derrick over a fluid line) — no external request, renders anywhere. */
+function LogoMark() {
+  return (
+    <svg viewBox="0 0 64 64" className="h-6 w-6" aria-hidden="true">
+      <rect width="64" height="64" rx="12" fill="#0f172a" />
+      <path
+        d="M32 10 L20 52 M32 10 L44 52 M24 38 h16 M27 26 h10"
+        stroke="#f59e0b"
+        strokeWidth="3"
+        fill="none"
+        strokeLinecap="round"
+      />
+      <path d="M12 52 h40" stroke="#38bdf8" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 /** App shell with a sticky header. */
 export function Layout({
   children,
@@ -29,7 +46,7 @@ export function Layout({
           <div className="min-w-0 flex-1">
             {title ?? (
               <div className="flex items-center gap-2">
-                <img src="/favicon.svg" alt="" className="h-6 w-6" />
+                <LogoMark />
                 <span className="text-lg font-bold tracking-tight">Swab-Link</span>
               </div>
             )}
