@@ -1,0 +1,76 @@
+name: Build Android APK
+
+# Builds the installable Android app and attaches the .apk to a GitHub Release
+# so it can be downloaded from:
+#   https://github.com/ether4o4/Swab-Link/releases/latest
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # needed to create/update the Release that holds the APK
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app (native mode)
+        run: npm run build
+        env:
+          CAPACITOR: 'true'
+
+      - name: Sync web build into the Android project
+        run: npx cap sync android
+
+      - name: Build debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk swab-link.apk
+
+      # Downloadable from the Actions run, and as a stable Release asset.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: swab-link-apk
+          path: swab-link.apk
+
+      - name: Publish to the "latest" Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Swab-Link — latest Android app
+          body: |
+            Download **swab-link.apk** below and install it on your Android phone.
+
+            First time only: when Android warns about installing from an unknown
+            source, tap **Settings → Allow from this source**, then open the APK
+            again and tap **Install**. The app works fully offline.
+          files: swab-link.apk
+          make_latest: true

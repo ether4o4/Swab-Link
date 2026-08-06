@@ -9,6 +9,9 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
 //   GITHUB_PAGES=true  -> sets the base path to /Swab-Link/ for project Pages
 const singleFile = process.env.SINGLEFILE === 'true'
 const githubPages = process.env.GITHUB_PAGES === 'true'
+// CAPACITOR=true builds for the native Android APK: assets served from the app
+// root (base '/') and no service worker (the APK already bundles everything).
+const capacitor = process.env.CAPACITOR === 'true'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -16,10 +19,13 @@ export default defineConfig({
   base: singleFile ? './' : githubPages ? '/Swab-Link/' : '/',
   plugins: [
     react(),
-    // The service worker / PWA install only makes sense for a hosted build.
+    // The service worker / PWA install only makes sense for a hosted web build,
+    // not the single-file bundle or the native APK.
     ...(singleFile
       ? [viteSingleFile()]
-      : [
+      : capacitor
+        ? []
+        : [
           VitePWA({
             registerType: 'autoUpdate',
             includeAssets: ['favicon.svg'],
