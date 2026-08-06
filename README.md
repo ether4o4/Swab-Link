@@ -17,18 +17,10 @@ your browser's **Share → Add to Home Screen** and it behaves like a real app i
 Nothing to install and nothing to type. (Data saves on each device by itself; to
 make phone and PC share the same jobs live, see *Live sync* below.)
 
-### One-time switch to make the link work (≈1 minute, do this once)
-
-The link goes live after you flip a single switch on GitHub — it can't turn
-itself on:
-
-1. Go to your repo → **Settings** → **Pages** (left sidebar).
-2. Under **Build and deployment → Source**, choose **GitHub Actions**.
-3. Done. Within a minute or two the app is live at the link above. It rebuilds
-   automatically every time the code changes — you never touch this again.
-
-If the page doesn't load yet, open the **Actions** tab and wait for the green
-check on the "Deploy app to GitHub Pages" run.
+The link goes live automatically the first time the app is built — the deploy
+turns GitHub Pages on for you, so there's nothing to switch on by hand. If the
+page 404s right after the very first deploy, give it a minute; you can watch
+progress under the repo's **Actions** tab ("Deploy app to GitHub Pages").
 
 ## What a work order captures
 
