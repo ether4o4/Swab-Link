@@ -1,33 +1,34 @@
 # Swab-Link
 
-A work-order app for pulling-unit / workover swabbing jobs. Fill out a work
-order on your phone at the well, and it shows up live on the office PC — one job
+A mobile work-order app for pulling-unit / workover swabbing jobs. Fill out a
+work order on your phone at the well — **works with no cell service** — one job
 per day, with swab readings and tank fluid levels logged continuously through the
-day.
+day. When you get back into service it uploads and shares to the office PC.
 
-Runs in any browser on phone or PC, and installs to the home screen (PWA).
+## 📲 Download the Android app
 
-## 👉 Just open the app (no coding)
+**Download:** https://github.com/ether4o4/Swab-Link/releases/latest → tap
+**swab-link.apk**
 
-**Live link:** https://ether4o4.github.io/Swab-Link/
+Install it on your phone (one time):
 
-Open it on your phone or your PC, same link. On a phone you can tap your browser's
-**Share → Add to Home Screen** and it behaves like a real app icon. (Data saves on
-each device by itself; to make phone and PC share the same jobs live, see *Live
-sync* below.)
+1. Tap the downloaded **swab-link.apk**.
+2. Android will warn it's from an "unknown source" — tap **Settings**, turn on
+   **Allow from this source**, then back out and tap the file again.
+3. Tap **Install**, then **Open**. Done — it's on your home screen like any app.
 
-### Turn the link on once (≈1 minute, one time only)
+The app runs **fully offline** — everything you enter saves right on the phone, no
+signal needed. (Sharing to the office PC turns on once cloud sync is connected —
+see *Live sync* below.)
 
-GitHub won't let the app switch this on by itself, so you flip it once:
+## Open in a browser instead (no install)
 
-1. In your repo, click **Settings** (top bar) → **Pages** (left sidebar).
-2. Under **Build and deployment → Source**, choose **GitHub Actions**.
-3. That's it. Within a minute or two the link above goes live, and from then on it
-   updates itself automatically every time the app changes — you never touch this
-   again.
+Prefer not to install anything? The same app runs in any browser here:
+**https://ether4o4.github.io/Swab-Link/**
 
-You can watch it build under the repo's **Actions** tab ("Deploy app to GitHub
-Pages"); a green check means it's live.
+This link needs turning on once (GitHub won't do it automatically): repo
+**Settings → Pages → Source → GitHub Actions**. After that it stays live and
+updates itself.
 
 ## What a work order captures
 
