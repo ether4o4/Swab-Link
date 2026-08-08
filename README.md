@@ -1,5 +1,8 @@
 # Swab-Link
 
+[![Download the Android APK](https://img.shields.io/badge/Download-swab--link.apk-3ddc84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/ether4o4/Swab-Link/releases/download/android-latest/swab-link.apk)
+[![Build Android APK](https://github.com/ether4o4/Swab-Link/actions/workflows/android.yml/badge.svg)](https://github.com/ether4o4/Swab-Link/actions/workflows/android.yml)
+
 A mobile work-order app for pulling-unit / workover swabbing jobs. Fill out a
 work order on your phone at the well — **works with no cell service** — one job
 per day, with swab readings and tank fluid levels logged continuously through the
@@ -7,8 +10,13 @@ day. When you get back into service it uploads and shares to the office PC.
 
 ## 📲 Download the Android app
 
-**Download:** https://github.com/ether4o4/Swab-Link/releases/latest → tap
-**swab-link.apk**
+**Direct download (always the newest build):**
+<https://github.com/ether4o4/Swab-Link/releases/download/android-latest/swab-link.apk>
+
+That link is a fixed address — it never changes, and every push to the default
+branch rebuilds the APK and replaces the file behind it. You can also browse the
+release page at
+<https://github.com/ether4o4/Swab-Link/releases/tag/android-latest>.
 
 Install it on your phone (one time):
 
@@ -24,11 +32,10 @@ see *Live sync* below.)
 ## Open in a browser instead (no install)
 
 Prefer not to install anything? The same app runs in any browser here:
-**https://ether4o4.github.io/Swab-Link/**
+**<https://ether4o4.github.io/Swab-Link/>**
 
-This link needs turning on once (GitHub won't do it automatically): repo
-**Settings → Pages → Source → GitHub Actions**. After that it stays live and
-updates itself.
+Pages is already switched on, so this link stays live and redeploys itself on
+every push to the default branch.
 
 ## What a work order captures
 
