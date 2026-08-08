@@ -6,7 +6,7 @@ name: Deploy app to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [claude/work-order-pulling-unit-form-ass9jz]
   workflow_dispatch: {}
 
 permissions:
