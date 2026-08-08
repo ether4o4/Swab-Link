@@ -1,12 +1,12 @@
 name: Build Android APK
 
 # Builds the installable Android app and attaches the .apk to a GitHub Release
-# so it can be downloaded from:
-#   https://github.com/ether4o4/Swab-Link/releases/latest
+# under a fixed rolling tag, so the download URL never changes:
+#   https://github.com/ether4o4/Swab-Link/releases/download/android-latest/swab-link.apk
 
 on:
   push:
-    branches: [main]
+    branches: [claude/work-order-pulling-unit-form-ass9jz]
   workflow_dispatch: {}
 
 permissions:
@@ -14,7 +14,9 @@ permissions:
 
 concurrency:
   group: android-apk
-  cancel-in-progress: true
+  # Never cancel a build that is already producing the APK; a cancelled build
+  # leaves the release asset stale.
+  cancel-in-progress: false
 
 jobs:
   build-apk:
@@ -55,8 +57,13 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
 
-      - name: Rename APK
+      - name: Rename APK to a stable filename
         run: cp android/app/build/outputs/apk/debug/app-debug.apk swab-link.apk
+
+      - name: Check the APK is a real zip archive
+        run: |
+          ls -l swab-link.apk
+          test "$(head -c 2 swab-link.apk)" = "PK"
 
       # Downloadable from the Actions run, and as a stable Release asset.
       - uses: actions/upload-artifact@v4
@@ -64,16 +71,22 @@ jobs:
           name: swab-link-apk
           path: swab-link.apk
 
-      - name: Publish to the "latest" Release
+      - name: Publish the APK to the rolling "android-latest" Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
+          tag_name: android-latest
+          target_commitish: ${{ github.sha }}
           name: Swab-Link — latest Android app
           body: |
             Download **swab-link.apk** below and install it on your Android phone.
 
+            Direct link (always the newest build):
+            https://github.com/ether4o4/Swab-Link/releases/download/android-latest/swab-link.apk
+
             First time only: when Android warns about installing from an unknown
             source, tap **Settings → Allow from this source**, then open the APK
             again and tap **Install**. The app works fully offline.
+
+            Built from commit ${{ github.sha }}.
           files: swab-link.apk
           make_latest: true
