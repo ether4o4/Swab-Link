@@ -22,14 +22,14 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v7
         with:
           distribution: temurin
           java-version: 21
@@ -66,13 +66,13 @@ jobs:
           test "$(head -c 2 swab-link.apk)" = "PK"
 
       # Downloadable from the Actions run, and as a stable Release asset.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: swab-link-apk
           path: swab-link.apk
 
       - name: Publish the APK to the rolling "android-latest" Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v4
         with:
           tag_name: android-latest
           target_commitish: ${{ github.sha }}
