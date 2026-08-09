@@ -1,0 +1,55 @@
+name: Deploy app to GitHub Pages
+
+# Builds the app and publishes it to a free web link every time main changes.
+# After the first successful run the app is live at:
+#   https://ether4o4.github.io/Swab-Link/
+
+on:
+  push:
+    branches: [claude/work-order-pulling-unit-form-ass9jz]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          GITHUB_PAGES: 'true'
+          # Optional: add these as repository secrets to turn on live sync
+          # across devices. Without them the app still works, saving on each
+          # device by itself.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      # Requires GitHub Pages to be turned on once by the repo owner:
+      # Settings -> Pages -> Build and deployment -> Source -> GitHub Actions.
+      # (GitHub does not allow the workflow token to enable Pages itself.)
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v7
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

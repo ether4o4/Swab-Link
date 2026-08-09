@@ -1,11 +1,41 @@
 # Swab-Link
 
-A work-order app for pulling-unit / workover swabbing jobs. Fill out a work
-order on your phone at the well, and it shows up live on the office PC — one job
-per day, with swab readings and tank fluid levels logged continuously through the
-day.
+[![Download the Android APK](https://img.shields.io/badge/Download-swab--link.apk-3ddc84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/ether4o4/Swab-Link/releases/download/android-latest/swab-link.apk)
+[![Build Android APK](https://github.com/ether4o4/Swab-Link/actions/workflows/android.yml/badge.svg)](https://github.com/ether4o4/Swab-Link/actions/workflows/android.yml)
 
-Runs in any browser on phone or PC, and installs to the home screen (PWA).
+A mobile work-order app for pulling-unit / workover swabbing jobs. Fill out a
+work order on your phone at the well — **works with no cell service** — one job
+per day, with swab readings and tank fluid levels logged continuously through the
+day. When you get back into service it uploads and shares to the office PC.
+
+## 📲 Download the Android app
+
+**Direct download (always the newest build):**
+<https://github.com/ether4o4/Swab-Link/releases/download/android-latest/swab-link.apk>
+
+That link is a fixed address — it never changes, and every push to the default
+branch rebuilds the APK and replaces the file behind it. You can also browse the
+release page at
+<https://github.com/ether4o4/Swab-Link/releases/tag/android-latest>.
+
+Install it on your phone (one time):
+
+1. Tap the downloaded **swab-link.apk**.
+2. Android will warn it's from an "unknown source" — tap **Settings**, turn on
+   **Allow from this source**, then back out and tap the file again.
+3. Tap **Install**, then **Open**. Done — it's on your home screen like any app.
+
+The app runs **fully offline** — everything you enter saves right on the phone, no
+signal needed. (Sharing to the office PC turns on once cloud sync is connected —
+see *Live sync* below.)
+
+## Open in a browser instead (no install)
+
+Prefer not to install anything? The same app runs in any browser here:
+**<https://ether4o4.github.io/Swab-Link/>**
+
+Pages is already switched on, so this link stays live and redeploys itself on
+every push to the default branch.
 
 ## What a work order captures
 
@@ -19,7 +49,10 @@ Runs in any browser on phone or PC, and installs to the home screen (PWA).
 - **Photos** — snap from the phone camera.
 - **Sign-off** — name + on-screen signature.
 
-## Run it locally
+## Run it locally (only if you're a developer)
+
+You do **not** need this to use the app — use the live link above. This is just for
+editing the code:
 
 ```bash
 npm install
@@ -27,8 +60,7 @@ npm run dev
 ```
 
 Open the printed URL. With no cloud configured it runs in **local mode**: data is
-saved in that browser only, no sync between devices. That's enough to try the whole
-form.
+saved in that browser only, no sync between devices.
 
 ## Turn on live sync across devices (Supabase — free)
 

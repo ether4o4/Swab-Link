@@ -1,0 +1,92 @@
+name: Build Android APK
+
+# Builds the installable Android app and attaches the .apk to a GitHub Release
+# under a fixed rolling tag, so the download URL never changes:
+#   https://github.com/ether4o4/Swab-Link/releases/download/android-latest/swab-link.apk
+
+on:
+  push:
+    branches: [claude/work-order-pulling-unit-form-ass9jz]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # needed to create/update the Release that holds the APK
+
+concurrency:
+  group: android-apk
+  # Never cancel a build that is already producing the APK; a cancelled build
+  # leaves the release asset stale.
+  cancel-in-progress: false
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v7
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app (native mode)
+        run: npm run build
+        env:
+          CAPACITOR: 'true'
+          # Optional: set these two repository secrets to bake in cloud sync so
+          # the APK auto-uploads to the office PC. Empty = fully offline, no sync.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Sync web build into the Android project
+        run: npx cap sync android
+
+      - name: Build debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Rename APK to a stable filename
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk swab-link.apk
+
+      - name: Check the APK is a real zip archive
+        run: |
+          ls -l swab-link.apk
+          test "$(head -c 2 swab-link.apk)" = "PK"
+
+      # Downloadable from the Actions run, and as a stable Release asset.
+      - uses: actions/upload-artifact@v5
+        with:
+          name: swab-link-apk
+          path: swab-link.apk
+
+      - name: Publish the APK to the rolling "android-latest" Release
+        uses: softprops/action-gh-release@v4
+        with:
+          tag_name: android-latest
+          target_commitish: ${{ github.sha }}
+          name: Swab-Link — latest Android app
+          body: |
+            Download **swab-link.apk** below and install it on your Android phone.
+
+            Direct link (always the newest build):
+            https://github.com/ether4o4/Swab-Link/releases/download/android-latest/swab-link.apk
+
+            First time only: when Android warns about installing from an unknown
+            source, tap **Settings → Allow from this source**, then open the APK
+            again and tap **Install**. The app works fully offline.
+
+            Built from commit ${{ github.sha }}.
+          files: swab-link.apk
+          make_latest: true
